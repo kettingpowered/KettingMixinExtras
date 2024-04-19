@@ -19,6 +19,11 @@ dependencies {
     implementation(libs.mixin)
 }
 
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
 publishing {
     publications {
         register('mavenJava', MavenPublication) {
