@@ -1,0 +1,32 @@
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'java'
+    id 'maven-publish'
+}
+
+repositories {
+    maven { url = 'https://nexus.c0d3m4513r.com/repository/Ketting/' }
+    maven { url = 'https://nexus.c0d3m4513r.com/repository/Magma/' }
+    mavenCentral()
+}
+
+version = "0.0.1"
+group = "org.kettingpowered"
+
+dependencies {
+    implementation(libs.bundles.asm)
+    implementation(libs.mixin)
+}
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            artifact jar
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+}
