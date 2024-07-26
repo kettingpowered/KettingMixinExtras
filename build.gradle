@@ -1,3 +1,5 @@
+import org.gradle.api.publish.maven.MavenPublication
+
 plugins {
     id 'eclipse'
     id 'idea'
@@ -25,9 +27,48 @@ java {
 }
 
 publishing {
-    publications {
-        register('mavenJava', MavenPublication) {
-            artifact jar
+    publications.register('mavenJava', MavenPublication).configure {
+        artifact jar
+        artifact sourcesJar
+
+        artifactId = project.name
+        pom {
+            name = project.name
+            description = "A custom Mixin plugin to allow some more customizability"
+            url = "https://github.com/kettingpowered/KettingMixinExtras"
+            developers {
+//                developer {
+//                    id = "justred23"
+//                    name = "JustRed23"
+//                }
+                developer {
+                    id = "c0d3m4513r"
+                    name = "C0D3 M4513R"
+                }
+            }
+            scm {
+                connection = "scm:git:https://github.com/kettingpowered/KettingMixinExtras.git"
+                url = "https://github.com/kettingpowered/KettingMixinExtras"
+            }
+        }
+    }
+
+    repositories {
+//        maven {
+//            name = "GitHubPackages"
+//            url = uri("https://maven.pkg.github.com/kettingpowered/Ketting-1-21-x")
+//            credentials {
+//                username = System.getenv("GITHUB_ACTOR")
+//                password = System.getenv("GITHUB_TOKEN")
+//            }
+//        }
+        maven {
+            name = 'kettingRepo'
+            credentials {
+                username = System.getenv("KETTINGUSERNAME")
+                password = System.getenv("KETTINGPASSWORD")
+            }
+            url = "https://reposilite.c0d3m4513r.com/Ketting/"
         }
     }
 }
