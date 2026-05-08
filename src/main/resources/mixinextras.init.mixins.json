@@ -1,4 +1,4 @@
 {
   "minVersion": "0.8",
-  "plugin": "org.kettingpowered.mixinextras.ExampleMixinPlugin"
+  "plugin": "org.kettingpowered.mixinextras.KettingMixinPlugin"
 }

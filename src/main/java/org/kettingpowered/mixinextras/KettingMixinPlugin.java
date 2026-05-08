@@ -15,7 +15,8 @@ import java.util.ListIterator;
 import java.util.Set;
 import java.util.function.Consumer;
 
-public class ExampleMixinPlugin implements IMixinConfigPlugin {
+public class KettingMixinPlugin implements IMixinConfigPlugin {
+
     @Override
     public void onLoad(String mixinPackage) {
         InjectionPoint.register(AfterInvokeC.class, "org.kettingpowered.mixinextras");
@@ -26,26 +27,8 @@ public class ExampleMixinPlugin implements IMixinConfigPlugin {
     }
 
     @Override
-    public String getRefMapperConfig() {
-        return null;
-    }
-
-    @Override
-    public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        return true;
-    }
-
-    @Override
-    public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {
-    }
-
-    @Override
-    public List<String> getMixins() {
-        return null;
-    }
-
-    @Override
     public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+
     }
 
     @Override
@@ -103,4 +86,17 @@ public class ExampleMixinPlugin implements IMixinConfigPlugin {
             }
         }
     }
+
+    //<editor-fold desc="Unused overrides">
+    @Override public String getRefMapperConfig() {
+        return null;
+    }
+    @Override public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        return true;
+    }
+    @Override public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {}
+    @Override public List<String> getMixins() {
+        return null;
+    }
+    //</editor-fold>
 }
