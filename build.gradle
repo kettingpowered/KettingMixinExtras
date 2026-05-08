@@ -8,12 +8,12 @@ plugins {
 }
 
 repositories {
-    maven { url = 'https://nexus.c0d3m4513r.com/repository/Ketting/' }
-    maven { url = 'https://nexus.c0d3m4513r.com/repository/Magma/' }
+    maven { url = 'https://reposilite.c0d3m4513r.com/repository/Ketting/' }
+    maven { url = 'https://reposilite.c0d3m4513r.com/repository/Magma/' }
     mavenCentral()
 }
 
-version = "0.1.1"
+version = "0.1.2"
 group = "org.kettingpowered"
 
 dependencies {
