@@ -13,7 +13,7 @@ repositories {
     mavenCentral()
 }
 
-version = "0.0.2-SNAPSHOT"
+version = "0.1.0-SNAPSHOT"
 group = "org.kettingpowered"
 
 dependencies {
@@ -37,10 +37,10 @@ publishing {
             description = "A custom Mixin plugin to allow some more customizability"
             url = "https://github.com/kettingpowered/KettingMixinExtras"
             developers {
-//                developer {
-//                    id = "justred23"
-//                    name = "JustRed23"
-//                }
+                developer {
+                    id = "justred23"
+                    name = "JustRed23"
+                }
                 developer {
                     id = "c0d3m4513r"
                     name = "C0D3 M4513R"
