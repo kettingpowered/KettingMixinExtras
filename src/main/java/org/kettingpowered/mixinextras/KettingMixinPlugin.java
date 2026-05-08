@@ -10,9 +10,12 @@ import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.spongepowered.asm.logging.ILogger;
+import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import org.spongepowered.asm.mixin.injection.InjectionPoint;
+import org.spongepowered.asm.service.MixinService;
 
 import java.util.List;
 import java.util.Set;
@@ -20,10 +23,18 @@ import java.util.function.Consumer;
 
 public class KettingMixinPlugin implements IMixinConfigPlugin {
 
+    public static final ILogger LOGGER = MixinService.getService().getLogger("KettingMixinExtras");
+    public static final boolean DEBUG = MixinEnvironment.getDefaultEnvironment().getOption(MixinEnvironment.Option.DEBUG_ALL);
+
     private final TransformerRegistry transformerRegistry = new TransformerRegistry();
+
+    public static void log(String message, Object... params) {
+        if (DEBUG) LOGGER.info(message, params);
+    }
 
     @Override
     public void onLoad(String mixinPackage) {
+        LOGGER.info("Loading KettingMixin plugin");
         InjectionPoint.register(AfterInvokeC.class, "org.kettingpowered.mixinextras");
         InjectionPoint.register(BeforeFieldAccessC.class, "org.kettingpowered.mixinextras");
         InjectionPoint.register(BeforeInvokeC.class, "org.kettingpowered.mixinextras");

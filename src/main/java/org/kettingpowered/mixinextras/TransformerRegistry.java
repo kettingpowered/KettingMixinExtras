@@ -28,6 +28,7 @@ public final class TransformerRegistry {
         if (method.invisibleAnnotations == null) return;
         methodTransformers.forEach((ann, transformer) -> {
             if (Annotations.getInvisible(method, ann) == null) return;
+            KettingMixinPlugin.log("Applying transformation to: {}:{}", targetClass.name, method.name);
             transformer.transform(targetClass, method);
         });
     }
@@ -36,6 +37,7 @@ public final class TransformerRegistry {
         if (field.invisibleAnnotations == null) return;
         fieldTransformers.forEach((ann, transformer) -> {
             if (Annotations.getInvisible(field, ann) == null) return;
+            KettingMixinPlugin.log("Applying transformation to field: {}.{}", targetClass.name, field.name);
             transformer.transform(targetClass, field);
         });
     }
