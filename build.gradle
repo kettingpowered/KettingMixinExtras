@@ -19,6 +19,7 @@ group = "org.kettingpowered"
 dependencies {
     implementation(libs.bundles.asm)
     implementation(libs.mixin)
+    implementation(libs.annotations)
 }
 
 java {

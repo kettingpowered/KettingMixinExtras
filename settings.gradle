@@ -19,6 +19,7 @@ dependencyResolutionManagement {
             bundle('asm', ['asm', 'asm-tree', 'asm-util', 'asm-commons', 'asm-analysis'])
 
             library('mixin', 'org.spongepowered:mixin:0.8.7')
+            library('annotations', 'org.jetbrains:annotations:26.0.2')
         }
     }
 }
