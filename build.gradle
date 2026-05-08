@@ -26,6 +26,14 @@ java {
     withJavadocJar()
 }
 
+jar {
+    manifest {
+        attributes(
+                'FMLModType': 'GAMELIBRARY'
+        )
+    }
+}
+
 publishing {
     publications.register('mavenJava', MavenPublication).configure {
         artifact jar
