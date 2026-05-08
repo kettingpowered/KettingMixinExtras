@@ -1,6 +1,5 @@
-package org.kettingpowered.mixinextras;
+package org.kettingpowered.mixinextras.annotations;
 
-import java.lang.annotation.Annotation;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 

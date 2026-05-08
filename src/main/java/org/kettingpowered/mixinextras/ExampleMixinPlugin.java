@@ -1,5 +1,6 @@
 package org.kettingpowered.mixinextras;
 
+import org.kettingpowered.mixinextras.annotations.*;
 import org.kettingpowered.mixinextras.injectionPoints.*;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
