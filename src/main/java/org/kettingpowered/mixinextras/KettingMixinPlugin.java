@@ -1,21 +1,26 @@
 package org.kettingpowered.mixinextras;
 
-import org.kettingpowered.mixinextras.annotations.*;
+import org.kettingpowered.mixinextras.annotations.NewConstructor;
+import org.kettingpowered.mixinextras.annotations.Public;
+import org.kettingpowered.mixinextras.annotations.SelfConstructorStub;
+import org.kettingpowered.mixinextras.annotations.SuperConstructorStub;
 import org.kettingpowered.mixinextras.injectionPoints.*;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.Type;
-import org.objectweb.asm.tree.*;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import org.spongepowered.asm.mixin.injection.InjectionPoint;
-import org.spongepowered.asm.util.Annotations;
 
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Set;
 import java.util.function.Consumer;
 
 public class KettingMixinPlugin implements IMixinConfigPlugin {
+
+    private final TransformerRegistry transformerRegistry = new TransformerRegistry();
 
     @Override
     public void onLoad(String mixinPackage) {
@@ -24,57 +29,47 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
         InjectionPoint.register(BeforeInvokeC.class, "org.kettingpowered.mixinextras");
         InjectionPoint.register(BeforeNewC.class, "org.kettingpowered.mixinextras");
         InjectionPoint.register(BeforeStringInvokeC.class, "org.kettingpowered.mixinextras");
+
+        addTransformers();
     }
 
-    @Override
-    public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+    private void addTransformers() {
+        transformerRegistry.add(NewConstructor.class, (targetClass, method) -> {
+            method.name = "<init>";
+        }, null);
 
-    }
+        transformerRegistry.add(Public.class,
+                (targetClass, method) -> {
+                    method.access &= ~Opcodes.ACC_PRIVATE;
+                    method.access &= ~Opcodes.ACC_PROTECTED;
+                    method.access |= Opcodes.ACC_PUBLIC;
+                },
+                (targetClass, field) -> {
+                    field.access &= ~Opcodes.ACC_PRIVATE;
+                    field.access &= ~Opcodes.ACC_PROTECTED;
+                    field.access |= Opcodes.ACC_PUBLIC;
+                }
+        );
 
-    @Override
-    public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-        AnnotationNode changeSuperClass = Annotations.getInvisible(targetClass, ChangeSuperClass.class);
-        if (changeSuperClass != null) {
-            String oldOwner = targetClass.superName;
-            targetClass.superName = Annotations.<Type>getValue(changeSuperClass).getInternalName();
+        transformerRegistry.add(SelfConstructorStub.class, (targetClass, method) -> {
             transformCalls(targetClass, call -> {
-                if (call.getOpcode() == Opcodes.INVOKESPECIAL && call.owner.equals(oldOwner)) {
+                if (call.name.equals(method.name) && call.desc.equals(method.desc)) {
+                    call.setOpcode(Opcodes.INVOKESPECIAL);
+                    call.name = "<init>";
+                    call.owner = targetClass.name;
+                }
+            });
+        }, null);
+
+        transformerRegistry.add(SuperConstructorStub.class, (targetClass, method) -> {
+            transformCalls(targetClass, call -> {
+                if (call.name.equals(method.name) && call.desc.equals(method.desc)) {
+                    call.setOpcode(Opcodes.INVOKESPECIAL);
+                    call.name = "<init>";
                     call.owner = targetClass.superName;
                 }
             });
-        }
-        for (ListIterator<MethodNode> it = targetClass.methods.listIterator(); it.hasNext(); ) {
-            MethodNode method = it.next();
-            if (Annotations.getInvisible(method, SuperConstructorStub.class) != null) {
-                it.remove();
-                transformCalls(targetClass, call -> {
-                    if (call.name.equals(method.name) && call.desc.equals(method.desc)) {
-                        call.setOpcode(Opcodes.INVOKESPECIAL);
-                        call.name = "<init>";
-                        call.owner = targetClass.superName;
-                    }
-                });
-                continue;
-            }
-            if (Annotations.getInvisible(method, SelfConstructorStub.class) != null) {
-                it.remove();
-                transformCalls(targetClass, call -> {
-                    if (call.name.equals(method.name) && call.desc.equals(method.desc)) {
-                        call.setOpcode(Opcodes.INVOKESPECIAL);
-                        call.name = "<init>";
-                        call.owner = targetClass.name;
-                    }
-                });
-                continue;
-            }
-            if (Annotations.getInvisible(method, Public.class) != null) {
-                method.access |= Opcodes.ACC_PUBLIC;
-                method.access &= ~(Opcodes.ACC_PRIVATE | Opcodes.ACC_PROTECTED);
-            }
-            if (Annotations.getInvisible(method, NewConstructor.class) != null) {
-                method.name = "<init>";
-            }
-        }
+        }, null);
     }
 
     private void transformCalls(ClassNode classNode, Consumer<MethodInsnNode> consumer) {
@@ -85,6 +80,11 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
                 }
             }
         }
+    }
+
+    @Override
+    public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+        transformerRegistry.apply(targetClass);
     }
 
     //<editor-fold desc="Unused overrides">
@@ -98,5 +98,6 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
     @Override public List<String> getMixins() {
         return null;
     }
+    @Override public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {}
     //</editor-fold>
 }
