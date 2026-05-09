@@ -119,7 +119,7 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
         }
         Type[] types = Type.getMethodType(method.desc).getArgumentTypes();
         method.maxStack = types.length + 2;
-        int varIndex = 0;
+        int varIndex = (method.access&Opcodes.ACC_STATIC) == 0 ? 1 : 0;
         for(int i = 0; i < types.length; i++){
             switch (types[i].getSort()) {
                 case Type.BOOLEAN:
