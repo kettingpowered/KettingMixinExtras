@@ -25,7 +25,8 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
     public static final ILogger LOGGER = MixinService.getService().getLogger("KettingMixinExtras");
     public static final boolean DEBUG = MixinEnvironment.getDefaultEnvironment().getOption(MixinEnvironment.Option.DEBUG_VERBOSE);
 
-    private final TransformerRegistry transformerRegistry = new TransformerRegistry();
+    private final TransformerRegistry preTransformerRegistry = new TransformerRegistry();
+    private final TransformerRegistry postTransformerRegistry = new TransformerRegistry();
 
     public static void log(String message, Object... params) {
         LOGGER.log(DEBUG?Level.INFO:Level.DEBUG, message, params);
@@ -45,11 +46,11 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
     }
 
     private void addTransformers() {
-        transformerRegistry.add(DelegateConstructor.class, (info, method) -> {
+        postTransformerRegistry.add(DelegateConstructor.class, (info, method) -> {
             final String name = Optional.ofNullable(info.annotationValues().get("clazz")).map(v -> ((Type)v).getInternalName()).orElse(info.targetClass().name);
 
             for(var new_method:info.targetClass().methods){
-                AnnotationNode node = Annotations.getInvisible(method, NewConstructor.class);
+                AnnotationNode node = Annotations.getInvisible(new_method, NewConstructor.class);
                 if (node == null) continue;
                 for(int i = 0; i < new_method.instructions.size(); i++) {
                     if (new_method.instructions.get(i) instanceof MethodInsnNode call) {
@@ -69,8 +70,8 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
             return -1;
         }, null);
 
-        transformerRegistry.add(NewConstructor.class, (info, method) -> {
-            method.name = "<init>";
+        postTransformerRegistry.add(NewConstructor.class, (info, method) -> {
+            method.name = Constants.CTOR;
             method.access &= ~Opcodes.ACC_STATIC;
             method.access &= ~Opcodes.ACC_ABSTRACT;
             method.access &= ~Opcodes.ACC_SYNCHRONIZED;
@@ -80,7 +81,7 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
             return 0;
         }, null);
 
-        transformerRegistry.add(Public.class,
+        postTransformerRegistry.add(Public.class,
                 (info, method) -> {
                     method.access &= ~Opcodes.ACC_PRIVATE;
                     method.access &= ~Opcodes.ACC_PROTECTED;
@@ -95,7 +96,7 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
                 }
         );
 
-        transformerRegistry.add(StubConstructor.class, (info, method) -> {
+        postTransformerRegistry.add(StubConstructor.class, (info, method) -> {
             final String name = Optional.ofNullable(info.annotationValues().get("clazz")).map(v -> ((Type)v).getInternalName()).orElse(info.targetClass().name);
             method.instructions.clear();
             method.instructions.add(newCall(method, name));
@@ -118,29 +119,35 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
         }
         Type[] types = Type.getMethodType(method.desc).getArgumentTypes();
         method.maxStack = types.length + 2;
+        int varIndex = 0;
         for(int i = 0; i < types.length; i++){
-            switch (types[i].getElementType().getSort()) {
+            switch (types[i].getSort()) {
                 case Type.BOOLEAN:
                 case Type.CHAR:
                 case Type.BYTE:
                 case Type.SHORT:
                 case Type.INT:
-                    list.add(new VarInsnNode(Opcodes.ILOAD, i));
+                    list.add(new VarInsnNode(Opcodes.ILOAD, varIndex++));
                     break;
                 case Type.FLOAT:
-                    list.add(new VarInsnNode(Opcodes.FLOAD, i));
+                    list.add(new VarInsnNode(Opcodes.FLOAD, varIndex++));
                     break;
                 case Type.LONG:
-                    list.add(new VarInsnNode(Opcodes.LLOAD, i));
+                    //longs take 2 stackframes
+                    method.maxStack += 1;
+                    list.add(new VarInsnNode(Opcodes.LLOAD, varIndex++));
+                    varIndex++;
                     break;
                 case Type.DOUBLE:
-                    list.add(new VarInsnNode(Opcodes.DLOAD, i));
+                    //doubles take 2 stackframes
+                    method.maxStack += 1;
+                    list.add(new VarInsnNode(Opcodes.DLOAD, varIndex++));
+                    varIndex++;
                     break;
                 case Type.OBJECT:
                 case Type.ARRAY:
-                    list.add(new VarInsnNode(Opcodes.ALOAD, i));
+                    list.add(new VarInsnNode(Opcodes.ALOAD, varIndex++));
                     break;
-
             }
         }
         list.add(invokeSpecialNode);
@@ -150,7 +157,10 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-        transformerRegistry.apply(targetClass, mixinInfo);
+        postTransformerRegistry.apply(targetClass, mixinInfo);
+    }
+    @Override public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+        preTransformerRegistry.apply(targetClass, mixinInfo);
     }
 
     //<editor-fold desc="Unused overrides">
@@ -164,6 +174,5 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
     @Override public List<String> getMixins() {
         return null;
     }
-    @Override public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {}
     //</editor-fold>
 }
