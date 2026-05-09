@@ -45,15 +45,15 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
     }
 
     private void addTransformers() {
-        transformerRegistry.add(DelegateConstructor.class, (targetClass, _i, method, annotation) -> {
-            final String name = Optional.ofNullable(annotation.get("clazz")).map(v -> ((Type)v).getInternalName()).orElse(targetClass.name);
+        transformerRegistry.add(DelegateConstructor.class, (info, method) -> {
+            final String name = Optional.ofNullable(info.annotationValues().get("clazz")).map(v -> ((Type)v).getInternalName()).orElse(info.targetClass().name);
 
-            for(var new_method:targetClass.methods){
+            for(var new_method:info.targetClass().methods){
                 AnnotationNode node = Annotations.getInvisible(method, NewConstructor.class);
                 if (node == null) continue;
                 for(int i = 0; i < new_method.instructions.size(); i++) {
                     if (new_method.instructions.get(i) instanceof MethodInsnNode call) {
-                        if (call.owner.equals(targetClass.name) && call.name.equals(method.name) && call.desc.equals(method.desc)){
+                        if (call.owner.equals(info.targetClass().name) && call.name.equals(method.name) && call.desc.equals(method.desc)){
                             //Rewriting just this should be fine, since the arguments should be setup properly already.
                             call.setOpcode(Opcodes.INVOKESPECIAL);
                             call.owner = name;
@@ -65,10 +65,11 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
                     }
                 }
             }
-            targetClass.methods.remove(method);
+            info.targetClass().methods.remove(method);
             return -1;
         }, null);
-        transformerRegistry.add(NewConstructor.class, (targetClass, _i, method, _a) -> {
+
+        transformerRegistry.add(NewConstructor.class, (info, method) -> {
             method.name = "<init>";
             method.access &= ~Opcodes.ACC_STATIC;
             method.access &= ~Opcodes.ACC_ABSTRACT;
@@ -80,13 +81,13 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
         }, null);
 
         transformerRegistry.add(Public.class,
-                (targetClass, _i, method, _a) -> {
+                (info, method) -> {
                     method.access &= ~Opcodes.ACC_PRIVATE;
                     method.access &= ~Opcodes.ACC_PROTECTED;
                     method.access |= Opcodes.ACC_PUBLIC;
                     return 0;
                 },
-                (targetClass, _i, field, _a) -> {
+                (info, field) -> {
                     field.access &= ~Opcodes.ACC_PRIVATE;
                     field.access &= ~Opcodes.ACC_PROTECTED;
                     field.access |= Opcodes.ACC_PUBLIC;
@@ -94,10 +95,10 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
                 }
         );
 
-        transformerRegistry.add(StubConstructor.class, (targetClass, info, annotated_method, annotation) -> {
-            final String name = Optional.ofNullable(annotation.get("clazz")).map(v -> ((Type)v).getInternalName()).orElse(targetClass.name);
-            annotated_method.instructions.clear();
-            annotated_method.instructions.add(newCall(annotated_method, name));
+        transformerRegistry.add(StubConstructor.class, (info, method) -> {
+            final String name = Optional.ofNullable(info.annotationValues().get("clazz")).map(v -> ((Type)v).getInternalName()).orElse(info.targetClass().name);
+            method.instructions.clear();
+            method.instructions.add(newCall(method, name));
             return 0;
         }, null);
     }

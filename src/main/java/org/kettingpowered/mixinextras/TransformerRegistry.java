@@ -39,7 +39,8 @@ final class TransformerRegistry {
             AnnotationNode annotationNode = Annotations.getInvisible(method, ann);
             if (annotationNode == null) return 0;
             KettingMixinPlugin.log("Applying transformation to: {}:{}", targetClass.name, method.name);
-            return transformer.transform(targetClass, mixinInfo, method, listToMap(ann, annotationNode.values));
+            var info = new InjectionInfo(targetClass, mixinInfo, listToMap(ann, annotationNode.values));
+            return transformer.transform(info, method);
         }).sum();
     }
 
@@ -51,7 +52,8 @@ final class TransformerRegistry {
             AnnotationNode annotationNode = Annotations.getInvisible(field, ann);
             if (annotationNode == null) return 0;
             KettingMixinPlugin.log("Applying transformation to field: {}.{}", targetClass.name, field.name);
-            return transformer.transform(targetClass, mixinInfo, field, listToMap(ann, annotationNode.values));
+            var info = new InjectionInfo(targetClass, mixinInfo, listToMap(ann, annotationNode.values));
+            return transformer.transform(info, field);
         }).sum();
     }
 
