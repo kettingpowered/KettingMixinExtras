@@ -81,6 +81,21 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
             return 0;
         }, null);
 
+        preTransformerRegistry.add(Public.class,
+                (info, method) -> {
+                    method.access |= ~Opcodes.ACC_PRIVATE;
+                    method.access &= ~Opcodes.ACC_PROTECTED;
+                    method.access &= ~Opcodes.ACC_PUBLIC;
+                    return 0;
+                },
+                (info, field) -> {
+                    field.access |= Opcodes.ACC_PRIVATE;
+                    field.access &= ~Opcodes.ACC_PROTECTED;
+                    field.access &= ~Opcodes.ACC_PUBLIC;
+                    return 0;
+                }
+        );
+
         postTransformerRegistry.add(Public.class,
                 (info, method) -> {
                     method.access &= ~Opcodes.ACC_PRIVATE;
