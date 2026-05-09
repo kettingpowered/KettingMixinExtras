@@ -11,7 +11,7 @@ import java.lang.annotation.RetentionPolicy;
 /// - clazz or a superclass of clazz.
 ///
 /// If the return Value is something bogus, you will still get an instance of clazz.
-/// The typing in our java source-code will just be wrong (which will sooner or later lead to issues)!
+/// The typing in your java source-code will just be wrong (which will sooner or later lead to issues)!
 ///
 /// Also, it's recommended (but not required), that the function tagged with this annotation is static,
 /// so that you can make use this function (in the source-code) in static contexts.
