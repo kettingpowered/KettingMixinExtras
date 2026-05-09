@@ -1,5 +1,6 @@
 package org.kettingpowered.mixinextras;
 
+import org.kettingpowered.mixinextras.annotations.DelegateConstructor;
 import org.kettingpowered.mixinextras.annotations.NewConstructor;
 import org.kettingpowered.mixinextras.annotations.Public;
 import org.kettingpowered.mixinextras.annotations.StubConstructor;
@@ -14,10 +15,10 @@ import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import org.spongepowered.asm.mixin.injection.InjectionPoint;
 import org.spongepowered.asm.service.MixinService;
+import org.spongepowered.asm.util.Annotations;
+import org.spongepowered.asm.util.Constants;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 public class KettingMixinPlugin implements IMixinConfigPlugin {
 
@@ -44,47 +45,111 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
     }
 
     private void addTransformers() {
-        transformerRegistry.add(NewConstructor.class, (targetClass, method, _a) -> {
-            method.name = "<init>";
-        }, null);
+        transformerRegistry.add(DelegateConstructor.class, (targetClass, _i, method, annotation) -> {
+            final String name = Optional.ofNullable(annotation.get("clazz")).map(v -> ((Type)v).getInternalName()).orElse(targetClass.name);
 
-        transformerRegistry.add(Public.class,
-                (targetClass, method, _a) -> {
-                    method.access &= ~Opcodes.ACC_PRIVATE;
-                    method.access &= ~Opcodes.ACC_PROTECTED;
-                    method.access |= Opcodes.ACC_PUBLIC;
-                },
-                (targetClass, field, _a) -> {
-                    field.access &= ~Opcodes.ACC_PRIVATE;
-                    field.access &= ~Opcodes.ACC_PROTECTED;
-                    field.access |= Opcodes.ACC_PUBLIC;
-                }
-        );
-
-        transformerRegistry.add(StubConstructor.class, (targetClass, annotated_method, annotation) -> {
-            for (MethodNode method : targetClass.methods) {
-                for (int i = 0; i < method.instructions.size(); i++) {
-                    AbstractInsnNode isn = method.instructions.get(i);
-                    if (isn instanceof MethodInsnNode call) {
-                        if (call.name.equals(method.name) && call.desc.equals(method.desc)) {
-                            final String name = Optional.ofNullable(annotation.get("clazz")).map(v -> ((Type)v).getInternalName()).orElse(targetClass.name);
-                            InsnList list = new InsnList();
-                            list.add(new TypeInsnNode(Opcodes.NEW, name));
-                            list.add(new InsnNode(Opcodes.DUP));
-                            method.instructions.insertBefore(call, list);
+            for(var new_method:targetClass.methods){
+                AnnotationNode node = Annotations.getInvisible(method, NewConstructor.class);
+                if (node == null) continue;
+                for(int i = 0; i < new_method.instructions.size(); i++) {
+                    if (new_method.instructions.get(i) instanceof MethodInsnNode call) {
+                        if (call.owner.equals(targetClass.name) && call.name.equals(method.name) && call.desc.equals(method.desc)){
+                            //Rewriting just this should be fine, since the arguments should be setup properly already.
                             call.setOpcode(Opcodes.INVOKESPECIAL);
-                            call.name = "<init>";
                             call.owner = name;
+                            call.name = Constants.CTOR;
+                            if (!method.desc.endsWith(")V")) {
+                                call.desc = method.desc.substring(0, method.desc.lastIndexOf(')')+1) + "V";
+                            }
                         }
                     }
                 }
             }
+            targetClass.methods.remove(method);
+            return -1;
         }, null);
+        transformerRegistry.add(NewConstructor.class, (targetClass, _i, method, _a) -> {
+            method.name = "<init>";
+            method.access &= ~Opcodes.ACC_STATIC;
+            method.access &= ~Opcodes.ACC_ABSTRACT;
+            method.access &= ~Opcodes.ACC_SYNCHRONIZED;
+            if (!method.desc.endsWith(")V")) {
+                method.desc = method.desc.substring(0, method.desc.lastIndexOf(')')+1) + "V";
+            }
+            return 0;
+        }, null);
+
+        transformerRegistry.add(Public.class,
+                (targetClass, _i, method, _a) -> {
+                    method.access &= ~Opcodes.ACC_PRIVATE;
+                    method.access &= ~Opcodes.ACC_PROTECTED;
+                    method.access |= Opcodes.ACC_PUBLIC;
+                    return 0;
+                },
+                (targetClass, _i, field, _a) -> {
+                    field.access &= ~Opcodes.ACC_PRIVATE;
+                    field.access &= ~Opcodes.ACC_PROTECTED;
+                    field.access |= Opcodes.ACC_PUBLIC;
+                    return 0;
+                }
+        );
+
+        transformerRegistry.add(StubConstructor.class, (targetClass, info, annotated_method, annotation) -> {
+            final String name = Optional.ofNullable(annotation.get("clazz")).map(v -> ((Type)v).getInternalName()).orElse(targetClass.name);
+            annotated_method.instructions.clear();
+            annotated_method.instructions.add(newCall(annotated_method, name));
+            return 0;
+        }, null);
+    }
+
+    private static InsnList newCall(MethodNode method, String name) {
+        InsnList list = new InsnList();
+        list.clear();
+        list.add(new TypeInsnNode(Opcodes.NEW, name));
+        MethodInsnNode invokeSpecialNode = new MethodInsnNode(Opcodes.INVOKESPECIAL, name, Constants.CTOR, method.desc, false);
+        final InsnNode ret;
+        if (!method.desc.endsWith(")V")) {
+            list.add(new InsnNode(Opcodes.DUP));
+            invokeSpecialNode.desc = method.desc.substring(0, method.desc.lastIndexOf(')')+1) + "V";
+            ret = new InsnNode(Opcodes.ARETURN);
+        } else {
+            ret = new InsnNode(Opcodes.RETURN);
+        }
+        Type[] types = Type.getMethodType(method.desc).getArgumentTypes();
+        method.maxStack = types.length + 2;
+        for(int i = 0; i < types.length; i++){
+            switch (types[i].getElementType().getSort()) {
+                case Type.BOOLEAN:
+                case Type.CHAR:
+                case Type.BYTE:
+                case Type.SHORT:
+                case Type.INT:
+                    list.add(new VarInsnNode(Opcodes.ILOAD, i));
+                    break;
+                case Type.FLOAT:
+                    list.add(new VarInsnNode(Opcodes.FLOAD, i));
+                    break;
+                case Type.LONG:
+                    list.add(new VarInsnNode(Opcodes.LLOAD, i));
+                    break;
+                case Type.DOUBLE:
+                    list.add(new VarInsnNode(Opcodes.DLOAD, i));
+                    break;
+                case Type.OBJECT:
+                case Type.ARRAY:
+                    list.add(new VarInsnNode(Opcodes.ALOAD, i));
+                    break;
+
+            }
+        }
+        list.add(invokeSpecialNode);
+        list.add(ret);
+        return list;
     }
 
     @Override
     public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-        transformerRegistry.apply(targetClass);
+        transformerRegistry.apply(targetClass, mixinInfo);
     }
 
     //<editor-fold desc="Unused overrides">

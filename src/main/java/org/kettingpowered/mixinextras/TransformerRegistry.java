@@ -7,6 +7,7 @@ import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import org.spongepowered.asm.util.Annotations;
 
 import java.lang.annotation.Annotation;
@@ -23,29 +24,35 @@ final class TransformerRegistry {
         if (fieldTransformer != null) fieldTransformers.put(annotation, fieldTransformer);
     }
 
-    void apply(ClassNode targetClass) {
-        targetClass.methods.forEach(m -> applyMethod(targetClass, m));
-        targetClass.fields.forEach(f -> applyField(targetClass, f));
+    void apply(ClassNode targetClass, IMixinInfo mixinInfo) {
+        for(int i = 0; i < targetClass.methods.size(); i++)
+            i += applyMethod(targetClass, mixinInfo, targetClass.methods.get(i));
+        for(int i = 0; i < targetClass.fields.size(); i++)
+            i += applyField(targetClass, mixinInfo, targetClass.fields.get(i));
     }
 
-    private void applyMethod(ClassNode targetClass, MethodNode method) {
-        if (method == null || method.invisibleAnnotations == null) return;
-        methodTransformers.forEach((ann, transformer) -> {
+    private int applyMethod(ClassNode targetClass, IMixinInfo mixinInfo, MethodNode method) {
+        if (method == null || method.invisibleAnnotations == null) return 0;
+        return methodTransformers.entrySet().stream().mapToInt(kv -> {
+            var ann = kv.getKey();
+            var transformer = kv.getValue();
             AnnotationNode annotationNode = Annotations.getInvisible(method, ann);
-            if (annotationNode == null) return;
+            if (annotationNode == null) return 0;
             KettingMixinPlugin.log("Applying transformation to: {}:{}", targetClass.name, method.name);
-            transformer.transform(targetClass, method, listToMap(ann, annotationNode.values));
-        });
+            return transformer.transform(targetClass, mixinInfo, method, listToMap(ann, annotationNode.values));
+        }).sum();
     }
 
-    private void applyField(ClassNode targetClass, FieldNode field) {
-        if (field == null || field.invisibleAnnotations == null) return;
-        fieldTransformers.forEach((ann, transformer) -> {
+    private int applyField(ClassNode targetClass, IMixinInfo mixinInfo, FieldNode field) {
+        if (field == null || field.invisibleAnnotations == null) return 0;
+        return fieldTransformers.entrySet().stream().mapToInt(kv -> {
+            var ann = kv.getKey();
+            var transformer = kv.getValue();
             AnnotationNode annotationNode = Annotations.getInvisible(field, ann);
-            if (annotationNode == null) return;
+            if (annotationNode == null) return 0;
             KettingMixinPlugin.log("Applying transformation to field: {}.{}", targetClass.name, field.name);
-            transformer.transform(targetClass, field, listToMap(ann, annotationNode.values));
-        });
+            return transformer.transform(targetClass, mixinInfo, field, listToMap(ann, annotationNode.values));
+        }).sum();
     }
 
     @Contract("_, _ -> !null")
