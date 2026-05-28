@@ -1,9 +1,6 @@
 package org.kettingpowered.mixinextras;
 
-import org.kettingpowered.mixinextras.annotations.DelegateConstructor;
-import org.kettingpowered.mixinextras.annotations.NewConstructor;
-import org.kettingpowered.mixinextras.annotations.Public;
-import org.kettingpowered.mixinextras.annotations.StubConstructor;
+import org.kettingpowered.mixinextras.annotations.*;
 import org.kettingpowered.mixinextras.injectionPoints.*;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -107,6 +104,14 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
                     field.access &= ~Opcodes.ACC_PRIVATE;
                     field.access &= ~Opcodes.ACC_PROTECTED;
                     field.access |= Opcodes.ACC_PUBLIC;
+                    return 0;
+                }
+        );
+
+        postTransformerRegistry.add(MakeFinal.class,
+                null,
+                (info, field) -> {
+                    field.access |= Opcodes.ACC_FINAL;
                     return 0;
                 }
         );
