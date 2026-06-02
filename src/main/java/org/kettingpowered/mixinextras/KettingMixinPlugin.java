@@ -45,9 +45,10 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
 
     private void addTransformers() {
         postTransformerRegistry.addClassTransformer(TransformMethod.class, (info, clazz) -> {
-            final String method = (String) info.annotationValues().get("method");
-            final String desc = (String) info.annotationValues().get("desc");
-            final List<Type> toApply = (List<Type>) info.annotationValues().get("toApply");
+            final Map<String, Object> annotationValues = info.annotationValues();
+            final String method = (String) annotationValues.get("method");
+            final String desc = (String) annotationValues.get("desc");
+            final List<Type> toApply = (List<Type>) annotationValues.get("toApply");
 
             Stream<MethodNode> filter = clazz.methods.stream()
                     .filter(methodNode -> methodNode.name.equals(method));
