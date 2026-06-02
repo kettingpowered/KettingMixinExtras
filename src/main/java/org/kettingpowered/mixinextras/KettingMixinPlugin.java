@@ -16,6 +16,7 @@ import org.spongepowered.asm.util.Annotations;
 import org.spongepowered.asm.util.Constants;
 
 import java.util.*;
+import java.util.stream.Stream;
 
 public class KettingMixinPlugin implements IMixinConfigPlugin {
 
@@ -43,6 +44,28 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
     }
 
     private void addTransformers() {
+        postTransformerRegistry.addClassTransformer(TransformMethod.class, (info, clazz) -> {
+            final String method = (String) info.annotationValues().get("method");
+            final String desc = (String) info.annotationValues().get("desc");
+            final List<Type> toApply = (List<Type>) info.annotationValues().get("toApply");
+
+            Stream<MethodNode> filter = clazz.methods.stream()
+                    .filter(methodNode -> methodNode.name.equals(method));
+
+            if (desc != null && !desc.isBlank())
+                filter = filter.filter(methodNode -> methodNode.desc.equals(desc));
+
+            final MethodNode m = filter.findFirst()
+                    .orElseThrow(() -> new RuntimeException("Could not find method " + method + " with desc " + desc + " in class " + clazz.name));
+
+            if (m.invisibleAnnotations == null) m.invisibleAnnotations = new ArrayList<>();
+
+            toApply.forEach(t -> {
+                AnnotationNode newAnnotation = new AnnotationNode(t.getDescriptor());
+                m.invisibleAnnotations.add(newAnnotation);
+            });
+        });
+
         postTransformerRegistry.add(DelegateConstructor.class, (info, method) -> {
             final String name = Optional.ofNullable(info.annotationValues().get("clazz")).map(v -> ((Type)v).getInternalName()).orElse(info.targetClass().name);
 
