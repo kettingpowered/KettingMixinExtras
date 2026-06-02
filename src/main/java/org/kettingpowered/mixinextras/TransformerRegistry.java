@@ -12,8 +12,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 final class TransformerRegistry {
+    private final Map<Class<? extends Annotation>, IClassTransformer> classTransformers = new HashMap<>();
     private final Map<Class<? extends Annotation>, IMethodTransformer> methodTransformers = new HashMap<>();
     private final Map<Class<? extends Annotation>, IFieldTransformer> fieldTransformers = new HashMap<>();
+
+    public void addClassTransformer(Class<? extends Annotation> annotation, IClassTransformer transformer) {
+        classTransformers.put(annotation, transformer);
+    }
 
     public void add(Class<? extends Annotation> annotation, IMethodTransformer methodTransformer, IFieldTransformer fieldTransformer) {
         if (methodTransformer != null) methodTransformers.put(annotation, methodTransformer);
@@ -21,10 +26,22 @@ final class TransformerRegistry {
     }
 
     void apply(ClassNode targetClass, IMixinInfo mixinInfo) {
+        applyClass(targetClass, mixinInfo);
         for(int i = 0; i < targetClass.methods.size(); i++)
             i += applyMethod(targetClass, mixinInfo, targetClass.methods.get(i));
         for(int i = 0; i < targetClass.fields.size(); i++)
             i += applyField(targetClass, mixinInfo, targetClass.fields.get(i));
+    }
+
+    private void applyClass(ClassNode targetClass, IMixinInfo mixinInfo) {
+        if (targetClass == null || targetClass.invisibleAnnotations == null) return;
+        classTransformers.forEach((key, value) -> {
+            AnnotationNode annotationNode = Annotations.getInvisible(targetClass, key);
+            if (annotationNode == null) return;
+            KettingMixinPlugin.log("Applying transformation to class: {}", targetClass.name);
+            InjectionInfo info = new InjectionInfo(targetClass, mixinInfo, annotationNode);
+            value.transform(info, targetClass);
+        });
     }
 
     private int applyMethod(ClassNode targetClass, IMixinInfo mixinInfo, MethodNode method) {
