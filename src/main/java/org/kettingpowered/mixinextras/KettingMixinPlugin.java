@@ -44,6 +44,94 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
     }
 
     private void addTransformers() {
+        postTransformerRegistry.addClassTransformer(TransformConstructor.class, (info, clazz) -> {
+            final Map<String, Object> annotationValues = info.annotationValues();
+            final String fieldName = (String) annotationValues.get("fieldName");
+            final String fieldDescriptor = (String) annotationValues.get("fieldDescriptor");
+            final String constructorDescriptor = (String) annotationValues.get("constructorDescriptor");
+            final String replacementConstructorDescriptor = (String) annotationValues.get("replacementConstructorDescriptor");
+
+            FieldNode field = clazz.fields.stream()
+                    .filter(candidate -> candidate.name.equals(fieldName))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("Could not find field " + fieldName + " in class " + clazz.name));
+            if ((field.access & Opcodes.ACC_STATIC) != 0) {
+                throw new IllegalStateException("Cannot assign an instance constructor argument to static field " + clazz.name + "." + fieldName);
+            }
+
+            MethodNode constructor = clazz.methods.stream()
+                    .filter(candidate -> candidate.name.equals(Constants.CTOR) && candidate.desc.equals(constructorDescriptor))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("Could not find constructor " + constructorDescriptor + " in class " + clazz.name));
+            if (clazz.methods.stream().anyMatch(candidate -> candidate != constructor
+                    && candidate.name.equals(Constants.CTOR)
+                    && candidate.desc.equals(replacementConstructorDescriptor))) {
+                throw new IllegalStateException("Constructor " + replacementConstructorDescriptor + " already exists in class " + clazz.name);
+            }
+
+            MethodInsnNode superConstructorCall = null;
+            for (AbstractInsnNode instruction : constructor.instructions) {
+                if (instruction instanceof MethodInsnNode methodInsn
+                        && methodInsn.getOpcode() == Opcodes.INVOKESPECIAL
+                        && methodInsn.owner.equals(clazz.superName)
+                        && methodInsn.name.equals(Constants.CTOR)) {
+                    superConstructorCall = methodInsn;
+                    break;
+                }
+            }
+            if (superConstructorCall == null) {
+                throw new IllegalStateException("Could not find the superclass constructor call in " + clazz.name + constructorDescriptor);
+            }
+
+            Type replacementType = Type.getMethodType(replacementConstructorDescriptor);
+            Type[] argumentTypes = replacementType.getArgumentTypes();
+            Type replacementFieldType = Type.getType(fieldDescriptor);
+            if (!replacementType.getReturnType().equals(Type.VOID_TYPE)
+                    || argumentTypes.length != 1
+                    || !argumentTypes[0].getDescriptor().equals(fieldDescriptor)
+                    || replacementFieldType.getSort() == Type.METHOD
+                    || replacementFieldType.getSort() == Type.VOID) {
+                throw new IllegalArgumentException("Replacement constructor must take exactly one argument matching field descriptor "
+                        + fieldDescriptor + " and return void");
+            }
+
+            String oldFieldDescriptor = field.desc;
+            field.desc = fieldDescriptor;
+            constructor.desc = replacementConstructorDescriptor;
+            constructor.signature = null;
+            constructor.instructions.clear();
+            constructor.instructions.add(new MethodInsnNode(Opcodes.INVOKESPECIAL, superConstructorCall.owner,
+                    Constants.CTOR, superConstructorCall.desc, superConstructorCall.itf));
+            constructor.instructions.add(new VarInsnNode(Opcodes.ALOAD, 0));
+            constructor.instructions.add(new VarInsnNode(argumentTypes[0].getOpcode(Opcodes.ILOAD), 1));
+            constructor.instructions.add(new FieldInsnNode(Opcodes.PUTFIELD, clazz.name, fieldName, fieldDescriptor));
+            constructor.instructions.add(new InsnNode(Opcodes.RETURN));
+            constructor.tryCatchBlocks.clear();
+            constructor.localVariables = null;
+            constructor.visibleLocalVariableAnnotations = null;
+            constructor.invisibleLocalVariableAnnotations = null;
+            constructor.visibleParameterAnnotations = null;
+            constructor.invisibleParameterAnnotations = null;
+            constructor.maxStack = 1 + argumentTypes[0].getSize();
+            constructor.maxLocals = 1 + argumentTypes[0].getSize();
+
+            for (MethodNode method : clazz.methods) {
+                for (AbstractInsnNode instruction : method.instructions) {
+                    if (instruction instanceof FieldInsnNode fieldInsn
+                            && fieldInsn.owner.equals(clazz.name)
+                            && fieldInsn.name.equals(fieldName)
+                            && fieldInsn.desc.equals(oldFieldDescriptor)) {
+                        fieldInsn.desc = fieldDescriptor;
+                    } else if (instruction instanceof MethodInsnNode methodInsn
+                            && methodInsn.owner.equals(clazz.name)
+                            && methodInsn.name.equals(Constants.CTOR)
+                            && methodInsn.desc.equals(constructorDescriptor)) {
+                        methodInsn.desc = replacementConstructorDescriptor;
+                    }
+                }
+            }
+        });
+
         postTransformerRegistry.addClassTransformer(TransformMethod.class, (info, clazz) -> {
             final Map<String, Object> annotationValues = info.annotationValues();
             final String method = (String) annotationValues.get("method");

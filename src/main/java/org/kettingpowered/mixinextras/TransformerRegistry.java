@@ -34,14 +34,24 @@ final class TransformerRegistry {
     }
 
     private void applyClass(ClassNode targetClass, IMixinInfo mixinInfo) {
-        if (targetClass == null || targetClass.invisibleAnnotations == null) return;
         classTransformers.forEach((key, value) -> {
-            AnnotationNode annotationNode = Annotations.getInvisible(targetClass, key);
-            if (annotationNode == null) return;
-            KettingMixinPlugin.log("Applying transformation to class: {}", targetClass.name);
-            InjectionInfo info = new InjectionInfo(targetClass, mixinInfo, annotationNode);
-            value.transform(info, targetClass);
+            if (targetClass != null && targetClass.invisibleAnnotations != null) {
+                AnnotationNode annotationNode = Annotations.getInvisible(targetClass, key);
+                if (annotationNode != null) applyClassTransformer(targetClass, mixinInfo, value, annotationNode);
+            }
+
+            ClassNode mixinClass = mixinInfo.getClassNode(0);
+            if (mixinClass.invisibleAnnotations != null) {
+                AnnotationNode annotationNode = Annotations.getInvisible(mixinClass, key);
+                if (annotationNode != null) applyClassTransformer(targetClass, mixinInfo, value, annotationNode);
+            }
         });
+    }
+
+    private void applyClassTransformer(ClassNode targetClass, IMixinInfo mixinInfo, IClassTransformer transformer, AnnotationNode annotationNode) {
+        KettingMixinPlugin.log("Applying transformation to class: {}", targetClass.name);
+        InjectionInfo info = new InjectionInfo(targetClass, mixinInfo, annotationNode);
+        transformer.transform(info, targetClass);
     }
 
     private int applyMethod(ClassNode targetClass, IMixinInfo mixinInfo, MethodNode method) {
