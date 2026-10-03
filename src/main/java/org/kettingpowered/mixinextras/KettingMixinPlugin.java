@@ -44,6 +44,60 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
     }
 
     private void addTransformers() {
+        preTransformerRegistry.addClassTransformer(TransformSuperclass.class, (info, clazz) -> {
+            final Map<String, Object> annotationValues = info.annotationValues();
+            final String newSuperclass = (String) annotationValues.get("superclass");
+            final String methodName = (String) annotationValues.get("methodName");
+            final List<String> methodDescriptorsToRemove = (List<String>) annotationValues.get("methodDescriptorsToRemove");
+
+            String oldSuperclass = clazz.superName;
+            if (!oldSuperclass.equals(newSuperclass)) {
+                for (String methodDescriptor : methodDescriptorsToRemove) {
+                    boolean removed = clazz.methods.removeIf(method ->
+                            method.name.equals(methodName) && method.desc.equals(methodDescriptor));
+                    if (!removed) {
+                        throw new IllegalStateException("Could not find method " + methodName + methodDescriptor
+                                + " to remove from class " + clazz.name);
+                    }
+                }
+
+                for (MethodNode method : clazz.methods) {
+                    for (AbstractInsnNode instruction : method.instructions) {
+                        if (instruction instanceof MethodInsnNode methodInsn
+                                && methodInsn.owner.equals(oldSuperclass)
+                                && methodInsn.name.equals(Constants.CTOR)) {
+                            methodInsn.owner = newSuperclass;
+                        }
+                    }
+                }
+
+                if (clazz.signature != null) {
+                    clazz.signature = clazz.signature
+                            .replace("L" + oldSuperclass + "<", "L" + newSuperclass + "<")
+                            .replace("L" + oldSuperclass + ";", "L" + newSuperclass + ";");
+                }
+                clazz.superName = newSuperclass;
+            }
+        });
+
+        postTransformerRegistry.addClassTransformer(TransformSuperclass.class, (info, clazz) -> {
+            final Map<String, Object> annotationValues = info.annotationValues();
+            final String methodName = (String) annotationValues.get("methodName");
+            final String bridgeDescriptor = Optional.ofNullable((String) annotationValues.get("bridgeDescriptor")).orElse("");
+            final String bridgeTargetDescriptor = Optional.ofNullable((String) annotationValues.get("bridgeTargetDescriptor")).orElse("");
+            if (bridgeDescriptor.isBlank()) return;
+
+            MethodNode bridgeTarget = clazz.methods.stream()
+                    .filter(method -> method.name.equals(methodName) && method.desc.equals(bridgeTargetDescriptor))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("Could not find bridge target "
+                            + methodName + bridgeTargetDescriptor + " in class " + clazz.name));
+            if (clazz.methods.stream().noneMatch(method ->
+                    method.name.equals(methodName) && method.desc.equals(bridgeDescriptor))) {
+                clazz.methods.add(createBridgeMethod(clazz.name, methodName, bridgeDescriptor, bridgeTarget.desc));
+            }
+        });
+
         postTransformerRegistry.addClassTransformer(TransformConstructor.class, (info, clazz) -> {
             final Map<String, Object> annotationValues = info.annotationValues();
             final String fieldName = (String) annotationValues.get("fieldName");
@@ -307,6 +361,49 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
         list.add(invokeSpecialNode);
         list.add(ret);
         return list;
+    }
+
+    private static MethodNode createBridgeMethod(String owner, String name, String bridgeDescriptor, String targetDescriptor) {
+        Type bridgeType = Type.getMethodType(bridgeDescriptor);
+        Type targetType = Type.getMethodType(targetDescriptor);
+        Type[] bridgeArguments = bridgeType.getArgumentTypes();
+        Type[] targetArguments = targetType.getArgumentTypes();
+        if (bridgeArguments.length != targetArguments.length
+                || bridgeType.getReturnType().getSort() != Type.VOID
+                || targetType.getReturnType().getSort() != Type.VOID) {
+            throw new IllegalArgumentException("Bridge and target must have the same argument count and return void");
+        }
+
+        MethodNode bridge = new MethodNode(Opcodes.ACC_PROTECTED | Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC,
+                name, bridgeDescriptor, null, null);
+        bridge.instructions.add(new VarInsnNode(Opcodes.ALOAD, 0));
+        int localIndex = 1;
+        int stackSize = 1;
+        for (int i = 0; i < bridgeArguments.length; i++) {
+            Type bridgeArgument = bridgeArguments[i];
+            Type targetArgument = targetArguments[i];
+            if (!bridgeArgument.equals(targetArgument)
+                    && (bridgeArgument.getSort() != Type.OBJECT && bridgeArgument.getSort() != Type.ARRAY
+                    || targetArgument.getSort() != Type.OBJECT && targetArgument.getSort() != Type.ARRAY)) {
+                throw new IllegalArgumentException("Bridge argument " + i + " cannot convert "
+                        + bridgeArgument + " to " + targetArgument);
+            }
+
+            bridge.instructions.add(new VarInsnNode(bridgeArgument.getOpcode(Opcodes.ILOAD), localIndex));
+            if (!bridgeArgument.equals(targetArgument)) {
+                String castType = targetArgument.getSort() == Type.OBJECT
+                        ? targetArgument.getInternalName()
+                        : targetArgument.getDescriptor();
+                bridge.instructions.add(new TypeInsnNode(Opcodes.CHECKCAST, castType));
+            }
+            localIndex += bridgeArgument.getSize();
+            stackSize += targetArgument.getSize();
+        }
+        bridge.instructions.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, owner, name, targetDescriptor, false));
+        bridge.instructions.add(new InsnNode(Opcodes.RETURN));
+        bridge.maxStack = stackSize;
+        bridge.maxLocals = localIndex;
+        return bridge;
     }
 
     @Override
