@@ -55,6 +55,11 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
                     .filter(candidate -> candidate.name.equals(fieldName))
                     .findFirst()
                     .orElseThrow(() -> new IllegalStateException("Could not find field " + fieldName + " in class " + clazz.name));
+            if (field.desc.equals(fieldDescriptor)
+                    && clazz.methods.stream().anyMatch(candidate -> candidate.name.equals(Constants.CTOR)
+                    && candidate.desc.equals(replacementConstructorDescriptor))) {
+                return;
+            }
             if ((field.access & Opcodes.ACC_STATIC) != 0) {
                 throw new IllegalStateException("Cannot assign an instance constructor argument to static field " + clazz.name + "." + fieldName);
             }
@@ -62,7 +67,13 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
             MethodNode constructor = clazz.methods.stream()
                     .filter(candidate -> candidate.name.equals(Constants.CTOR) && candidate.desc.equals(constructorDescriptor))
                     .findFirst()
-                    .orElseThrow(() -> new IllegalStateException("Could not find constructor " + constructorDescriptor + " in class " + clazz.name));
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Could not find constructor " + constructorDescriptor
+                                    + " in class " + clazz.name
+                                    + "; found: " + clazz.methods.stream()
+                                    .filter(candidate -> candidate.name.equals(Constants.CTOR))
+                                    .map(candidate -> candidate.desc)
+                                    .toList()));
             if (clazz.methods.stream().anyMatch(candidate -> candidate != constructor
                     && candidate.name.equals(Constants.CTOR)
                     && candidate.desc.equals(replacementConstructorDescriptor))) {
@@ -99,9 +110,12 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
             field.desc = fieldDescriptor;
             constructor.desc = replacementConstructorDescriptor;
             constructor.signature = null;
-            constructor.instructions.clear();
-            constructor.instructions.add(new MethodInsnNode(Opcodes.INVOKESPECIAL, superConstructorCall.owner,
-                    Constants.CTOR, superConstructorCall.desc, superConstructorCall.itf));
+            AbstractInsnNode remainingInstruction = superConstructorCall.getNext();
+            while (remainingInstruction != null) {
+                AbstractInsnNode next = remainingInstruction.getNext();
+                constructor.instructions.remove(remainingInstruction);
+                remainingInstruction = next;
+            }
             constructor.instructions.add(new VarInsnNode(Opcodes.ALOAD, 0));
             constructor.instructions.add(new VarInsnNode(argumentTypes[0].getOpcode(Opcodes.ILOAD), 1));
             constructor.instructions.add(new FieldInsnNode(Opcodes.PUTFIELD, clazz.name, fieldName, fieldDescriptor));
@@ -112,8 +126,8 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
             constructor.invisibleLocalVariableAnnotations = null;
             constructor.visibleParameterAnnotations = null;
             constructor.invisibleParameterAnnotations = null;
-            constructor.maxStack = 1 + argumentTypes[0].getSize();
-            constructor.maxLocals = 1 + argumentTypes[0].getSize();
+            constructor.maxStack = Math.max(constructor.maxStack, 1 + argumentTypes[0].getSize());
+            constructor.maxLocals = Math.max(constructor.maxLocals, 1 + argumentTypes[0].getSize());
 
             for (MethodNode method : clazz.methods) {
                 for (AbstractInsnNode instruction : method.instructions) {
