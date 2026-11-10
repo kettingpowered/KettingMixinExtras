@@ -1,6 +1,7 @@
 package org.kettingpowered.mixinextras;
 
 import org.kettingpowered.mixinextras.annotations.*;
+import org.kettingpowered.mixinextras.context.ContextOverloadExtension;
 import org.kettingpowered.mixinextras.injectionPoints.*;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -41,6 +42,7 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
         InjectionPoint.register(BeforeStringInvokeC.class, "org.kettingpowered.mixinextras");
 
         addTransformers();
+        ContextOverloadExtension.register();
     }
 
     private void addTransformers() {
@@ -420,6 +422,7 @@ public class KettingMixinPlugin implements IMixinConfigPlugin {
         return null;
     }
     @Override public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        ContextOverloadExtension.registerMixin(targetClassName, mixinClassName);
         return true;
     }
     @Override public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {}

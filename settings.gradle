@@ -20,6 +20,7 @@ dependencyResolutionManagement {
 
             library('mixin', 'org.spongepowered:mixin:0.8.7')
             library('annotations', 'org.jetbrains:annotations:26.0.2')
+            library('mixinextras', 'io.github.llamalad7:mixinextras-neoforge:0.5.5')
         }
     }
 }
